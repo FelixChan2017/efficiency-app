@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>人效历史记录</h1>
+
+{% if records %}
+<table>
+    <thead>
+        <tr>
+            <th>Sheet</th>
+            <th>作业人员</th>
+            <th>起始快照</th>
+            <th>结束快照</th>
+            <th>作业增量</th>
+            <th>工时</th>
+            <th>人效</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in records %}
+        <tr>
+            <td>{{ r.sheet_title }}</td>
+            <td>{{ r.worker_name }}</td>
+            <td>{{ r.from_label or ('#' ~ r.snapshot_from_id) }}</td>
+            <td>{{ r.to_label or ('#' ~ r.snapshot_to_id) }}</td>
+            <td class="num">{{ r.work_done }}</td>
+            <td class="num">{{ r.work_hours }}</td>
+            <td class="num">{{ "%.2f"|format(r.work_done / r.work_hours) if r.work_hours else "-" }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">暂无记录。请先在"人效计算"页面选择两个快照进行对比。</p>
+{% endif %}
+
+<a href="/" class="btn-back">← 返回</a>
+{% endblock %}

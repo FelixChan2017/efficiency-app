@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>快照详情</h1>
+
+<dl class="meta">
+    <dt>表格名称</dt><dd>{{ snap.spreadsheet_title }}</dd>
+    <dt>抓取时间</dt><dd>{{ snap.fetched_at }}</dd>
+    <dt>链接</dt><dd><a href="{{ snap.spreadsheet_url }}" target="_blank">{{ snap.spreadsheet_url[:80] }}...</a></dd>
+</dl>
+
+{% for stitle, items in sheets.items() %}
+<h2>{{ stitle }}</h2>
+<table>
+    <thead>
+        <tr><th>作业人员</th><th>轮次</th><th>已完成</th><th>总任务</th></tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+        <tr>
+            <td>{{ item.worker_name }}</td>
+            <td>{{ item.round }}</td>
+            <td>{{ item.completed_count }}</td>
+            <td>{{ item.total_count }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+
+<a href="/" class="btn-back">← 返回</a>
+{% endblock %}

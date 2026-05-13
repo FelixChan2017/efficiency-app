@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>快照管理</h1>
+
+<form method="POST" action="/fetch" class="fetch-form">
+    <label for="url">飞书表格链接：</label>
+    <input type="text" id="url" name="url" placeholder="粘贴飞书表格或知识库链接..." size="80" required>
+    <button type="submit">抓取数据</button>
+</form>
+
+<h2>历史快照</h2>
+{% if snapshots %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>表格名称</th>
+            <th>抓取时间</th>
+            <th>标签</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for s in snapshots %}
+        <tr>
+            <td>{{ s.id }}</td>
+            <td><a href="/snapshot/{{ s.id }}">{{ s.spreadsheet_title or s.spreadsheet_url[:60] }}</a></td>
+            <td>{{ s.fetched_at }}</td>
+            <td>
+                <form method="POST" action="/update-label/{{ s.id }}" class="inline-form">
+                    <input type="text" name="label" value="{{ s.label or '' }}" placeholder="时间点标签" size="15">
+                    <button type="submit">保存</button>
+                </form>
+            </td>
+            <td class="actions">
+                <a href="/snapshot/{{ s.id }}">查看</a>
+                <form method="POST" action="/delete/{{ s.id }}" class="inline-form" onsubmit="return confirm('确定删除此快照？')">
+                    <button type="submit" class="btn-danger">删除</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">暂无快照，请先输入链接抓取数据。</p>
+{% endif %}
+{% endblock %}

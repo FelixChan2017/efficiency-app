@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>人效计算</h1>
+
+<form method="GET" action="/compare" class="compare-select">
+    <label>
+        起始快照：
+        <select name="from">
+            <option value="">-- 选择 --</option>
+            {% for s in snapshots %}
+            <option value="{{ s.id }}" {% if from_id|string == s.id|string %}selected{% endif %}>
+                {% if s.label %}[{{ s.label }}]{% endif %}
+                {{ s.spreadsheet_title or ('快照#' ~ s.id) }}
+                — {{ s.fetched_at[:19] }}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        结束快照：
+        <select name="to">
+            <option value="">-- 选择 --</option>
+            {% for s in snapshots %}
+            <option value="{{ s.id }}" {% if to_id|string == s.id|string %}selected{% endif %}>
+                {% if s.label %}[{{ s.label }}]{% endif %}
+                {{ s.spreadsheet_title or ('快照#' ~ s.id) }}
+                — {{ s.fetched_at[:19] }}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit">计算差值</button>
+</form>
+
+{% if result %}
+<h2>结果对比</h2>
+<form method="POST" action="/save-efficiency" id="efficiency-form">
+    <input type="hidden" name="from_id" value="{{ from_id }}">
+    <input type="hidden" name="to_id" value="{{ to_id }}">
+
+    <table>
+        <thead>
+            <tr>
+                <th>Sheet</th>
+                <th>作业人员</th>
+                <th>起始完成</th>
+                <th>结束完成</th>
+                <th>作业增量</th>
+                <th>工时（小时）</th>
+                <th>人效（件/小时）</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for i in range(result|length) %}
+        {% set r = result[i] %}
+            <tr>
+                <td>{{ r.sheet_title }}</td>
+                <td>{{ r.worker_name }}</td>
+                <td>{{ r.from_count }}</td>
+                <td>{{ r.to_count }}</td>
+                <td class="num">{{ r.work_done }}</td>
+                <td><input type="number" name="work_hours_{{ i }}" step="0.5" min="0"
+                           class="hours-input" data-row="{{ i }}"
+                           value="{{ r.work_hours }}"></td>
+                <td class="num efficiency-cell" id="eff_{{ i }}">-</td>
+            </tr>
+            <input type="hidden" name="sheet_{{ i }}" value="{{ r.sheet_title }}">
+            <input type="hidden" name="worker_{{ i }}" value="{{ r.worker_name }}">
+            <input type="hidden" name="work_done_{{ i }}" value="{{ r.work_done }}">
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <button type="submit">保存人效记录</button>
+</form>
+
+<form method="POST" action="/export-to-feishu" style="margin-top:16px; background:#fff; padding:16px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <input type="hidden" name="from_id" value="{{ from_id }}">
+    <input type="hidden" name="to_id" value="{{ to_id }}">
+    <label style="display:block; margin-bottom:8px; font-weight:bold;">导出到飞书表格</label>
+    <div style="margin-bottom:10px;">
+        <label style="font-size:13px; color:#555;">目标表格链接（可选，留空则自动创建新表格）：</label>
+        <input type="text" name="dest_url" placeholder="粘贴已有飞书表格链接..." size="60" style="width:100%; padding:6px 10px; border:1px solid #ccc; border-radius:4px; font-size:13px; margin-top:4px;">
+    </div>
+    <button type="submit" style="background:#27ae60;">导出</button>
+    <span style="color:#888; margin-left:8px; font-size:13px;">
+        含作业人员、增量等列，工时和人效留空在飞书中填写
+    </span>
+</form>
+{% elif from_id and to_id %}
+<p class="empty">两次快照之间没有新增完成的作业。</p>
+{% endif %}
+
+<a href="/" class="btn-back">← 返回</a>
+
+<script src="/static/main.js"></script>
+{% endblock %}
