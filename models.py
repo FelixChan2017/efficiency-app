@@ -75,7 +75,10 @@ def _run_migrations(current):
             conn.execute("INSERT INTO schema_migrations (version) VALUES (1)")
     if current < 2:
         with get_db() as conn:
-            conn.execute("ALTER TABLE efficiency_records ADD COLUMN sheet_title TEXT DEFAULT ''")
+            try:
+                conn.execute("ALTER TABLE efficiency_records ADD COLUMN sheet_title TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass  # Column may already exist in fresh DB
             conn.execute("INSERT INTO schema_migrations (version) VALUES (2)")
     if current < 3:
         with get_db() as conn:
@@ -88,11 +91,17 @@ def _run_migrations(current):
             conn.execute("INSERT INTO schema_migrations (version) VALUES (3)")
     if current < 4:
         with get_db() as conn:
-            conn.execute("ALTER TABLE worker_list ADD COLUMN default_hours REAL DEFAULT 8.0")
+            try:
+                conn.execute("ALTER TABLE worker_list ADD COLUMN default_hours REAL DEFAULT 8.0")
+            except sqlite3.OperationalError:
+                pass
             conn.execute("INSERT INTO schema_migrations (version) VALUES (4)")
     if current < 5:
         with get_db() as conn:
-            conn.execute("ALTER TABLE worker_list ADD COLUMN company TEXT DEFAULT ''")
+            try:
+                conn.execute("ALTER TABLE worker_list ADD COLUMN company TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
             conn.execute("INSERT INTO schema_migrations (version) VALUES (5)")
 
 
