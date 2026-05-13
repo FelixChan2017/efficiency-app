@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>填写工时</h1>
+
+{% if workers %}
+<form method="POST" action="/hours">
+    <table>
+        <thead>
+            <tr><th>作业人员</th><th>工时（小时）</th></tr>
+        </thead>
+        <tbody>
+        {% for w in workers %}
+            <tr>
+                <td>{{ w.worker_name }}</td>
+                <td><input type="number" name="hours_{{ w.id }}" step="0.5" min="0"
+                           value="{{ w.default_hours }}" class="hours-input"></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit">保存工时</button>
+</form>
+{% else %}
+<p class="empty">名单为空，请先在「人员名单」中添加人员。</p>
+{% endif %}
+
+<a href="/" class="btn-back">← 返回</a>
+{% endblock %}

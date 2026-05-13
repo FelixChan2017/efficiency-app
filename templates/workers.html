@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>人员名单管理</h1>
+
+<form method="POST" action="/workers/add" class="inline-form" style="margin-bottom:16px;">
+    <input type="text" name="name" placeholder="姓名" size="15" required autofocus>
+    <input type="text" name="company" placeholder="公司（可选）" size="20" style="margin-left:6px;">
+    <button type="submit">添加</button>
+</form>
+
+{% if suggestions %}
+<div style="margin-bottom:16px; font-size:14px; color:#666;">
+    从最新快照快速添加：
+    {% for s in suggestions %}
+    <a href="#" onclick="document.querySelector('input[name=name]').value='{{ s }}';return false"
+       style="display:inline-block; margin:2px 4px; padding:2px 8px; background:#eee; border-radius:10px; color:#333; text-decoration:none;">{{ s }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if workers %}
+<table>
+    <thead>
+        <tr><th>姓名</th><th>公司</th><th>默认工时（h）</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+    {% for w in workers %}
+        <tr>
+            <td>{{ w.worker_name }}</td>
+            <td>
+                <input type="text" value="{{ w.company }}" style="border:1px solid transparent; background:transparent; padding:2px 4px; width:140px;"
+                       onfocus="this.style.border='1px solid #ccc';this.style.background='#fff'"
+                       onblur="this.style.border='1px solid transparent';this.style.background='transparent';saveField({{ w.id }},'company',this.value)"
+                       onkeydown="if(event.key==='Enter'){this.blur();return false}">
+            </td>
+            <td>
+                <input type="number" value="{{ w.default_hours }}" step="0.5" min="0" style="border:1px solid transparent; background:transparent; padding:2px 4px; width:60px; text-align:center;"
+                       onfocus="this.style.border='1px solid #ccc';this.style.background='#fff'"
+                       onblur="this.style.border='1px solid transparent';this.style.background='transparent';saveField({{ w.id }},'hours',this.value)"
+                       onkeydown="if(event.key==='Enter'){this.blur();return false}">
+            </td>
+            <td>
+                <form method="POST" action="/workers/delete/{{ w.id }}" class="inline-form"
+                      onsubmit="return confirm('确定移除 {{ w.worker_name }}？')">
+                    <button type="submit" class="btn-danger">移除</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">名单为空，请添加需要计算人效的人员。</p>
+{% endif %}
+
+<a href="/" class="btn-back">← 返回</a>
+
+<script>
+function saveField(id, field, value) {
+    var body = new URLSearchParams();
+    body.append(field, value);
+    fetch('/workers/update/' + id, {method: 'POST', body: body});
+}
+</script>
+{% endblock %}

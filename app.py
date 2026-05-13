@@ -70,148 +70,162 @@ def update_label(snapshot_id):
     return redirect(url_for("index"))
 
 
-@app.route("/compare")
-def compare():
+@app.route("/workers")
+def workers():
+    worker_list = models.list_workers()
     snapshots = models.list_snapshots()
-    from_id = request.args.get("from")
-    to_id = request.args.get("to")
+    suggestions = []
+    if snapshots:
+        latest = snapshots[0]
+        agg = models.get_snapshot_worker_agg(latest["id"])
+        existing = {w["worker_name"] for w in worker_list}
+        suggestions = [r["worker_name"] for r in agg if r["worker_name"] not in existing]
+    return render_template("workers.html", workers=worker_list, suggestions=suggestions)
+
+
+@app.route("/workers/add", methods=["POST"])
+def workers_add():
+    name = request.form.get("name", "").strip()
+    company = request.form.get("company", "").strip()
+    if name:
+        if not models.add_worker(name, company):
+            flash(f"「{name}」已在名单中", "warning")
+    return redirect(url_for("workers"))
+
+
+@app.route("/workers/update/<int:worker_id>", methods=["POST"])
+def workers_update(worker_id):
+    company = request.form.get("company", "").strip()
+    hours = request.form.get("hours", "").strip()
+    if company:
+        models.update_worker_company(worker_id, company)
+    if hours:
+        try:
+            h = float(hours)
+            if h > 0:
+                models.update_worker_hours(worker_id, h)
+        except (ValueError, TypeError):
+            pass
+    return redirect(url_for("workers"))
+
+
+@app.route("/workers/delete/<int:worker_id>", methods=["POST"])
+def workers_delete(worker_id):
+    models.remove_worker(worker_id)
+    return redirect(url_for("workers"))
+
+
+@app.route("/hours")
+def hours_page():
+    workers = models.list_workers()
+    return render_template("hours.html", workers=workers)
+
+
+@app.route("/hours", methods=["POST"])
+def hours_save():
+    for w in models.list_workers():
+        wid = str(w["id"])
+        val = request.form.get(f"hours_{wid}")
+        if val:
+            try:
+                h = float(val)
+                if h > 0:
+                    models.update_worker_hours(w["id"], h)
+            except (ValueError, TypeError):
+                pass
+    flash("工时已更新", "success")
+    return redirect(url_for("hours_page"))
+
+
+@app.route("/dashboard")
+def dashboard():
+    snapshots = models.list_snapshots()
+    from_id = request.args.get("from_id")
+    to_id = request.args.get("to_id")
+
+    # Auto-select latest two snapshots
+    if not from_id and not to_id and len(snapshots) >= 2:
+        from_id = str(snapshots[1]["id"])
+        to_id = str(snapshots[0]["id"])
 
     result = None
+    from_label = ""
+    to_label = ""
     if from_id and to_id:
         from_id = int(from_id)
         to_id = int(to_id)
-        from_details = models.get_snapshot_details_by_sheet(from_id)
-        to_details = models.get_snapshot_details_by_sheet(to_id)
+        from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
+        to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
+        hours_map = models.get_worker_hours_map()
 
-        # Aggregate by (sheet, worker): sum completed across rounds
-        from_index = {}
-        for r in from_details:
-            key = (r["sheet_title"], r["worker_name"])
-            from_index[key] = from_index.get(key, 0) + r["completed_count"]
+        from_snap, _ = models.get_snapshot(from_id)
+        to_snap, _ = models.get_snapshot(to_id)
+        from_label = from_snap["label"] or f"快照{from_id}"
+        to_label = to_snap["label"] or f"快照{to_id}"
 
-        to_index = {}
-        for r in to_details:
-            key = (r["sheet_title"], r["worker_name"])
-            to_index[key] = to_index.get(key, 0) + r["completed_count"]
-
-        sheets_order = []
-        seen_sheets = set()
         result = []
-        for (sheet, worker), to_count in to_index.items():
-            prev = from_index.get((sheet, worker), 0)
-            diff = to_count - prev
-            if diff > 0:
-                if sheet not in seen_sheets:
-                    seen_sheets.add(sheet)
-                    sheets_order.append(sheet)
-                result.append({
-                    "sheet_title": sheet,
-                    "worker_name": worker,
-                    "from_count": prev,
-                    "to_count": to_count,
-                    "work_done": diff,
-                    "work_hours": "",
-                    "efficiency": "",
-                })
+        for name, hours in hours_map.items():
+            prev = from_agg.get(name, 0)
+            curr = to_agg.get(name, 0)
+            diff = curr - prev
+            result.append({
+                "worker_name": name,
+                "from_count": prev,
+                "to_count": curr,
+                "work_done": diff,
+                "work_hours": hours,
+            })
 
-    return render_template("compare.html", snapshots=snapshots,
+    return render_template("dashboard.html", snapshots=snapshots,
                            from_id=from_id, to_id=to_id, result=result,
-                           sheets_order=sheets_order if result else [])
+                           from_label=from_label, to_label=to_label)
 
 
-@app.route("/save-efficiency", methods=["POST"])
-def save_efficiency():
-    from_id = request.form.get("from_id")
-    to_id = request.form.get("to_id")
-
-    records = []
-    i = 0
-    while True:
-        worker = request.form.get(f"worker_{i}")
-        if worker is None:
-            break
-        sheet = request.form.get(f"sheet_{i}", "")
-        work_done = request.form.get(f"work_done_{i}")
-        work_hours = request.form.get(f"work_hours_{i}")
-
-        if work_done and work_hours:
-            try:
-                done = int(work_done)
-                hours = float(work_hours)
-                if done > 0 and hours > 0:
-                    records.append((int(from_id), int(to_id), worker, done, hours, sheet))
-            except (ValueError, TypeError):
-                pass
-        i += 1
-
-    if records:
-        models.save_efficiency_records(records)
-        flash(f"已保存 {len(records)} 条人效记录", "success")
-
-    return redirect(url_for("history"))
-
-
-@app.route("/export-to-feishu", methods=["POST"])
-def export_to_feishu():
+@app.route("/dashboard/export", methods=["POST"])
+def dashboard_export():
     from_id = int(request.form.get("from_id"))
     to_id = int(request.form.get("to_id"))
     dest_url = request.form.get("dest_url", "").strip()
 
+    from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
+    to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
+    info_map = models.get_worker_info_map()
+
+    rows = [["作业人员", "公司", "作业增量", "工时（小时）", "人效"]]
+    for name, info in info_map.items():
+        diff = to_agg.get(name, 0) - from_agg.get(name, 0)
+        hours = info["hours"]
+        eff = diff / hours if hours > 0 else 0
+        rows.append([name, info["company"], str(diff), str(hours), f"{eff:.2f}"])
+
     from_snap, _ = models.get_snapshot(from_id)
     to_snap, _ = models.get_snapshot(to_id)
-
-    from_details = models.get_snapshot_details_by_sheet(from_id)
-    to_details = models.get_snapshot_details_by_sheet(to_id)
-
-    from_index = {}
-    for r in from_details:
-        key = (r["sheet_title"], r["worker_name"])
-        from_index[key] = from_index.get(key, 0) + r["completed_count"]
-
-    to_index = {}
-    for r in to_details:
-        key = (r["sheet_title"], r["worker_name"])
-        to_index[key] = to_index.get(key, 0) + r["completed_count"]
-
-    rows = [["Sheet", "作业人员", "起始完成量", "结束完成量", "作业增量", "工时（小时）", "人效"]]
-    for (sheet, worker), to_count in to_index.items():
-        prev = from_index.get((sheet, worker), 0)
-        diff = to_count - prev
-        if diff > 0:
-            rows.append([sheet, worker, str(prev), str(to_count), str(diff), "", ""])
-
-    if len(rows) <= 1:
-        flash("没有任何差异数据可导出", "warning")
-        return redirect(f"/compare?from={from_id}&to={to_id}")
-
     from_label = from_snap["label"] or f"快照{from_id}"
     to_label = to_snap["label"] or f"快照{to_id}"
     date_label = to_snap["fetched_at"][:10]
 
     try:
         if dest_url:
-            # Write to existing spreadsheet
             dest_token, _ = resolve_feishu_url(dest_url)
-            sheet_title = f"人效对比_{date_label}_{from_label}vs{to_label}"
+            sheet_title = f"人效看板_{date_label}_{from_label}vs{to_label}"
             sheet_id = create_sheet(dest_token, sheet_title)
             if not sheet_id:
                 flash("创建子表失败，请确认链接有效且有编辑权限", "error")
-                return redirect(f"/compare?from={from_id}&to={to_id}")
+                return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
             write_to_sheet(dest_token, sheet_id, rows)
             ss_url = dest_url
         else:
-            # Create new spreadsheet
-            result = create_spreadsheet(f"人效对比_{date_label}_{from_label}vs{to_label}")
+            result = create_spreadsheet(f"人效看板_{date_label}_{from_label}vs{to_label}")
             token = result["token"]
             sheet_id = result.get("sheet_id", "")
             ss_url = result["url"]
             write_to_sheet(token, sheet_id, rows)
     except Exception as e:
         flash(f"导出失败: {e}", "error")
-        return redirect(f"/compare?from={from_id}&to={to_id}")
+        return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
 
     flash(f"已导出到: {ss_url}", "success")
-    return redirect(f"/compare?from={from_id}&to={to_id}")
+    return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
 
 
 @app.route("/history")

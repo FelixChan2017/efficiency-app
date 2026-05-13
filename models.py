@@ -46,6 +46,13 @@ def init_db():
                 work_hours REAL NOT NULL,
                 sheet_title TEXT DEFAULT ''
             );
+
+            CREATE TABLE IF NOT EXISTS worker_list (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                worker_name TEXT NOT NULL UNIQUE,
+                default_hours REAL DEFAULT 8.0,
+                company TEXT DEFAULT ''
+            );
         """)
 
     # Run migrations
@@ -70,6 +77,23 @@ def _run_migrations(current):
         with get_db() as conn:
             conn.execute("ALTER TABLE efficiency_records ADD COLUMN sheet_title TEXT DEFAULT ''")
             conn.execute("INSERT INTO schema_migrations (version) VALUES (2)")
+    if current < 3:
+        with get_db() as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS worker_list (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    worker_name TEXT NOT NULL UNIQUE
+                );
+            """)
+            conn.execute("INSERT INTO schema_migrations (version) VALUES (3)")
+    if current < 4:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE worker_list ADD COLUMN default_hours REAL DEFAULT 8.0")
+            conn.execute("INSERT INTO schema_migrations (version) VALUES (4)")
+    if current < 5:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE worker_list ADD COLUMN company TEXT DEFAULT ''")
+            conn.execute("INSERT INTO schema_migrations (version) VALUES (5)")
 
 
 # ---- Snapshot CRUD ----
@@ -146,11 +170,11 @@ def delete_snapshot(snapshot_id):
 # ---- Efficiency Record CRUD ----
 
 def save_efficiency_records(records):
-    """records: list of (snapshot_from_id, snapshot_to_id, worker_name, work_done, work_hours, sheet_title)"""
+    """records: list of (snapshot_from_id, snapshot_to_id, worker_name, work_done, work_hours)"""
     with get_db() as conn:
         conn.executemany(
-            "INSERT INTO efficiency_records (snapshot_from_id, snapshot_to_id, worker_name, work_done, work_hours, sheet_title) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO efficiency_records (snapshot_from_id, snapshot_to_id, worker_name, work_done, work_hours) "
+            "VALUES (?, ?, ?, ?, ?)",
             records
         )
 
@@ -164,3 +188,71 @@ def list_efficiency_records():
             "LEFT JOIN snapshots s2 ON e.snapshot_to_id = s2.id "
             "ORDER BY e.id DESC"
         ).fetchall()
+
+
+def get_latest_efficiency(from_id, to_id):
+    """Return latest efficiency records for a given snapshot pair, grouped by worker."""
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT worker_name, SUM(work_done) as work_done, SUM(work_hours) as work_hours "
+            "FROM efficiency_records "
+            "WHERE snapshot_from_id=? AND snapshot_to_id=? "
+            "GROUP BY worker_name ORDER BY worker_name",
+            (from_id, to_id)
+        ).fetchall()
+
+
+def get_snapshot_worker_agg(snapshot_id):
+    """Return per-worker aggregated completion (sum across all sheets and rounds)."""
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT worker_name, SUM(completed_count) as completed "
+            "FROM snapshot_details WHERE snapshot_id=? "
+            "GROUP BY worker_name ORDER BY worker_name",
+            (snapshot_id,)
+        ).fetchall()
+
+
+# ---- Worker List CRUD ----
+
+def add_worker(name, company=""):
+    with get_db() as conn:
+        try:
+            conn.execute("INSERT INTO worker_list (worker_name, company) VALUES (?, ?)", (name, company))
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+
+def remove_worker(worker_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM worker_list WHERE id=?", (worker_id,))
+
+
+def update_worker_hours(worker_id, hours):
+    with get_db() as conn:
+        conn.execute("UPDATE worker_list SET default_hours=? WHERE id=?", (hours, worker_id))
+
+
+def update_worker_company(worker_id, company):
+    with get_db() as conn:
+        conn.execute("UPDATE worker_list SET company=? WHERE id=?", (company, worker_id))
+
+
+def list_workers():
+    with get_db() as conn:
+        return conn.execute("SELECT * FROM worker_list ORDER BY worker_name").fetchall()
+
+
+def get_worker_hours_map():
+    """Return {worker_name: default_hours} dict."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT worker_name, default_hours FROM worker_list").fetchall()
+        return {r["worker_name"]: r["default_hours"] for r in rows}
+
+
+def get_worker_info_map():
+    """Return {worker_name: {company, default_hours}} dict."""
+    with get_db() as conn:
+        rows = conn.execute("SELECT worker_name, company, default_hours FROM worker_list").fetchall()
+        return {r["worker_name"]: {"company": r["company"], "hours": r["default_hours"]} for r in rows}

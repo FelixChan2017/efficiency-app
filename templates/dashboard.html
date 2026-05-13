@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>人效看板</h1>
+
+<form method="GET" action="/dashboard" class="compare-select">
+    <label>
+        起始快照：
+        <select name="from_id">
+            <option value="">-- 选择 --</option>
+            {% for s in snapshots %}
+            <option value="{{ s.id }}" {% if from_id|string == s.id|string %}selected{% endif %}>
+                {% if s.label %}[{{ s.label }}]{% endif %}
+                {{ s.spreadsheet_title or ('快照#' ~ s.id) }}
+                — {{ s.fetched_at[:19] }}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        结束快照：
+        <select name="to_id">
+            <option value="">-- 选择 --</option>
+            {% for s in snapshots %}
+            <option value="{{ s.id }}" {% if to_id|string == s.id|string %}selected{% endif %}>
+                {% if s.label %}[{{ s.label }}]{% endif %}
+                {{ s.spreadsheet_title or ('快照#' ~ s.id) }}
+                — {{ s.fetched_at[:19] }}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit">查询</button>
+</form>
+
+{% if result %}
+<p style="color:#666; margin:8px 0;">
+    {{ from_label }} → {{ to_label }}，共 {{ result|length }} 人
+</p>
+<table>
+    <thead>
+        <tr>
+            <th>作业人员</th>
+            <th>起始完成</th>
+            <th>结束完成</th>
+            <th>作业增量</th>
+            <th>工时（小时）</th>
+            <th>人效（件/小时）</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in result %}
+        <tr>
+            <td>{{ r.worker_name }}</td>
+            <td class="num">{{ r.from_count }}</td>
+            <td class="num">{{ r.to_count }}</td>
+            <td class="num">{{ r.work_done }}</td>
+            <td class="num">{{ r.work_hours }}</td>
+            <td class="num">{{ "%.2f"|format(r.work_done / r.work_hours) if r.work_hours else "-" }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<form method="POST" action="/dashboard/export" style="margin-top:16px; background:#fff; padding:16px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <input type="hidden" name="from_id" value="{{ from_id }}">
+    <input type="hidden" name="to_id" value="{{ to_id }}">
+    <label style="display:block; margin-bottom:8px; font-weight:bold;">导出到飞书表格</label>
+    <div style="margin-bottom:10px;">
+        <input type="text" name="dest_url" placeholder="粘贴已有飞书表格链接（可选，留空自动创建）..." size="60"
+               style="width:100%; padding:6px 10px; border:1px solid #ccc; border-radius:4px; font-size:13px;">
+    </div>
+    <button type="submit" style="background:#27ae60;">导出</button>
+</form>
+{% elif from_id and to_id %}
+<p class="empty">名单为空。请先在「人员名单」中添加人员，并在「填写工时」中设置工时。</p>
+{% endif %}
+
+<a href="/" class="btn-back">← 返回</a>
+{% endblock %}
