@@ -5,7 +5,7 @@
 <form method="POST" action="/fetch" class="fetch-form">
     <label for="url">飞书表格链接：</label>
     <input type="text" id="url" name="url" placeholder="粘贴飞书表格或知识库链接..." size="80" required>
-    <button type="submit">抓取数据</button>
+    <button type="submit" onclick="this.disabled=true;this.form.submit()">抓取数据</button>
 </form>
 
 <h2>历史快照</h2>
