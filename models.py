@@ -173,6 +173,7 @@ def update_snapshot_label(snapshot_id, label):
 
 def delete_snapshot(snapshot_id):
     with get_db() as conn:
+        conn.execute("DELETE FROM efficiency_records WHERE snapshot_from_id=? OR snapshot_to_id=?", (snapshot_id, snapshot_id))
         conn.execute("DELETE FROM snapshots WHERE id=?", (snapshot_id,))
 
 

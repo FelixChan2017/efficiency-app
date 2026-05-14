@@ -1,5 +1,7 @@
 __pycache__/
 *.db
+*.db-shm
+*.db-wal
 *.pyc
 /dist/
 /build/
