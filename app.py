@@ -27,6 +27,23 @@ def _format_ts(ts):
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _sheet_title(base_title):
+    return base_title[:80]
+
+
+def _create_unique_sheet(token, base_title):
+    title = _sheet_title(base_title)
+    try:
+        return create_sheet(token, title), title
+    except RuntimeError as exc:
+        if "code=90210" not in str(exc) and "already exist" not in str(exc):
+            raise
+
+    suffix = datetime.now().strftime("%H%M%S")
+    title = _sheet_title(f"{base_title}_{suffix}")
+    return create_sheet(token, title), title
+
+
 @app.route("/")
 def index():
     snapshots = models.list_snapshots()
@@ -263,15 +280,15 @@ def dashboard_export():
     try:
         if dest_url:
             dest_token, _ = resolve_feishu_url(dest_url)
-            sheet_title = f"人效看板_{date_label}_{from_label}vs{to_label}"
-            sheet_id = create_sheet(dest_token, sheet_title)
+            base_title = f"人效看板_{date_label}_{from_label}vs{to_label}"
+            sheet_id, sheet_title = _create_unique_sheet(dest_token, base_title)
             if not sheet_id:
                 flash("创建子表失败，请确认链接有效且有编辑权限", "error")
                 return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
             write_to_sheet(dest_token, sheet_id, rows)
             ss_url = dest_url
         else:
-            result = create_spreadsheet(f"人效看板_{date_label}_{from_label}vs{to_label}")
+            result = create_spreadsheet(_sheet_title(f"人效看板_{date_label}_{from_label}vs{to_label}"))
             token = result["token"]
             sheet_id = result.get("sheet_id", "")
             ss_url = result["url"]
