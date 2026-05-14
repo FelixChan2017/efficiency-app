@@ -20,9 +20,9 @@
 
 ## Windows 用户直接使用
 
-1. 在 GitHub Release 下载 `人效计算.exe`。
+1. 在 GitHub Release 下载 `efficiency-app.exe`。
 2. 放到一个固定文件夹里，例如 `D:\人效计算工具\`。
-3. 双击运行 `人效计算.exe`。
+3. 双击运行 `efficiency-app.exe`。
 4. 程序会启动本地服务，并自动打开浏览器页面。
 5. 首次使用进入「飞书配置」，填写飞书自建应用的 `App ID` 和 `App Secret`。
 
@@ -75,7 +75,7 @@ pyinstaller --noconfirm --clean --onefile --windowed --name 人效计算 --add-d
 打包完成后，exe 位于：
 
 ```text
-dist\人效计算.exe
+dist\efficiency-app.exe
 ```
 
 ## 数据安全说明
