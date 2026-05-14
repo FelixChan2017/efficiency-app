@@ -1,17 +1,62 @@
 """人效计算工具 — Flask 主应用"""
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from datetime import datetime
+import os
+import sys
+from flask import Flask, render_template, request, redirect, url_for, flash
 import models
 from lark_reader import fetch_and_parse, create_spreadsheet, create_sheet, write_to_sheet, resolve_url as resolve_feishu_url
-from paths import APPDIR
+from feishu_auth import save_app_config, has_app_config, get_token, mark_config_validated, get_app_config_status
 
-app = Flask(__name__)
+
+def resource_path(relative_path):
+    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, relative_path)
+
+
+app = Flask(
+    __name__,
+    template_folder=resource_path("templates"),
+    static_folder=resource_path("static"),
+)
 app.secret_key = "efficiency-app-secret-key"
+
+
+def _format_ts(ts):
+    if not ts:
+        return ""
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @app.route("/")
 def index():
     snapshots = models.list_snapshots()
-    return render_template("index.html", snapshots=snapshots)
+    return render_template("index.html", snapshots=snapshots, has_feishu_config=has_app_config())
+
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if request.method == "POST":
+        app_id = request.form.get("app_id", "").strip()
+        app_secret = request.form.get("app_secret", "").strip()
+
+        if not app_id or not app_secret:
+            flash("请输入 App ID 和 App Secret", "error")
+            return redirect(url_for("settings"))
+
+        save_app_config(app_id, app_secret)
+        try:
+            get_token()
+        except Exception as e:
+            flash(f"凭证已保存，但验证失败: {e}", "error")
+            return redirect(url_for("settings"))
+
+        mark_config_validated()
+        flash("飞书应用凭证已保存并验证通过", "success")
+        return redirect(url_for("index"))
+
+    status = get_app_config_status()
+    status["last_validated_display"] = _format_ts(status["last_validated_at"])
+    return render_template("settings.html", status=status)
 
 
 @app.route("/fetch", methods=["POST"])
@@ -22,7 +67,7 @@ def fetch():
         return redirect(url_for("index"))
 
     try:
-        title, details = fetch_and_parse(url)
+        title, details, warnings = fetch_and_parse(url, include_warnings=True)
     except Exception as e:
         flash(f"读取表格失败: {e}", "error")
         return redirect(url_for("index"))
@@ -35,6 +80,8 @@ def fetch():
     models.save_snapshot_details(snapshot_id, details)
 
     flash(f"抓取成功：{title}，共 {len(details)} 条记录", "success")
+    if warnings:
+        flash("部分子表未计入：" + "；".join(warnings[:5]), "warning")
     return redirect(url_for("snapshot_detail", snapshot_id=snapshot_id))
 
 
@@ -97,15 +144,17 @@ def workers_add():
 def workers_update(worker_id):
     company = request.form.get("company", "").strip()
     hours = request.form.get("hours", "").strip()
-    if company:
+    if "company" in request.form:
         models.update_worker_company(worker_id, company)
-    if hours:
+    if "hours" in request.form:
         try:
             h = float(hours)
             if h > 0:
                 models.update_worker_hours(worker_id, h)
+            else:
+                flash("工时必须大于 0", "warning")
         except (ValueError, TypeError):
-            pass
+            flash("工时格式不正确", "warning")
     return redirect(url_for("workers"))
 
 
@@ -123,6 +172,7 @@ def hours_page():
 
 @app.route("/hours", methods=["POST"])
 def hours_save():
+    invalid = []
     for w in models.list_workers():
         wid = str(w["id"])
         val = request.form.get(f"hours_{wid}")
@@ -131,9 +181,14 @@ def hours_save():
                 h = float(val)
                 if h > 0:
                     models.update_worker_hours(w["id"], h)
+                else:
+                    invalid.append(w["worker_name"])
             except (ValueError, TypeError):
-                pass
-    flash("工时已更新", "success")
+                invalid.append(w["worker_name"])
+    if invalid:
+        flash("以下人员工时未更新，请输入大于 0 的数字：" + "、".join(invalid), "warning")
+    else:
+        flash("工时已更新", "success")
     return redirect(url_for("hours_page"))
 
 
@@ -156,7 +211,7 @@ def dashboard():
         to_id = int(to_id)
         from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
         to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
-        hours_map = models.get_worker_hours_map()
+        info_map = models.get_worker_info_map()
 
         from_snap, _ = models.get_snapshot(from_id)
         to_snap, _ = models.get_snapshot(to_id)
@@ -164,16 +219,17 @@ def dashboard():
         to_label = to_snap["label"] or f"快照{to_id}"
 
         result = []
-        for name, hours in hours_map.items():
+        for name, info in info_map.items():
             prev = from_agg.get(name, 0)
             curr = to_agg.get(name, 0)
             diff = curr - prev
             result.append({
                 "worker_name": name,
+                "company": info["company"],
                 "from_count": prev,
                 "to_count": curr,
                 "work_done": diff,
-                "work_hours": hours,
+                "work_hours": info["hours"],
             })
 
     return render_template("dashboard.html", snapshots=snapshots,
@@ -235,8 +291,21 @@ def history():
 
 
 if __name__ == "__main__":
-    import sys, webbrowser, threading
+    import os, socket, sys, webbrowser, threading
+
+    def _pick_port(preferred_port):
+        port = preferred_port
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                try:
+                    sock.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    port += 1
+
     models.init_db()
+    port = _pick_port(int(os.environ.get("PORT", "5000")))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1" and not getattr(sys, "frozen", False)
     if getattr(sys, "frozen", False):
-        threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
-    app.run(host="127.0.0.1", port=5000, debug=not getattr(sys, "frozen", False))
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
+    app.run(host="127.0.0.1", port=port, debug=debug)

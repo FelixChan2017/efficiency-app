@@ -10,6 +10,19 @@ def _headers():
     return {"Authorization": f"Bearer {get_token()}", "Content-Type": "application/json"}
 
 
+def _json_or_error(resp, action):
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise RuntimeError(f"{action}失败: 飞书返回了非 JSON 响应（HTTP {resp.status_code}）") from exc
+
+    if data.get("code") != 0:
+        msg = data.get("msg") or data.get("message") or "未知错误"
+        raise RuntimeError(f"{action}失败: {msg}（code={data.get('code')}）")
+
+    return data
+
+
 def resolve_url(url):
     """Resolve Feishu URL to (spreadsheet_token, title)."""
     if "/wiki/" in url:
@@ -21,7 +34,7 @@ def resolve_url(url):
             headers=_headers(),
             timeout=30,
         )
-        data = resp.json().get("data", {}).get("node", {})
+        data = _json_or_error(resp, "解析知识库链接").get("data", {}).get("node", {})
         obj_token = data.get("obj_token", "")
         obj_type = data.get("obj_type", "")
         title = data.get("title", "")
@@ -37,7 +50,7 @@ def resolve_url(url):
             headers=_headers(),
             timeout=30,
         )
-        d = resp.json().get("data", {}).get("spreadsheet", {})
+        d = _json_or_error(resp, "读取表格信息").get("data", {}).get("spreadsheet", {})
         return token, d.get("title", "")
 
     raise RuntimeError("无法从URL解析表格token")
@@ -50,7 +63,7 @@ def get_spreadsheet_info(token):
         headers=_headers(),
         timeout=30,
     )
-    sheets = resp.json().get("data", {}).get("sheets", [])
+    sheets = _json_or_error(resp, "读取子表列表").get("data", {}).get("sheets", [])
     result = []
     for s in sheets:
         props = s.get("grid_properties", {})
@@ -71,7 +84,7 @@ def read_sheet_data(token, sheet_id):
         headers=_headers(),
         timeout=30,
     )
-    vr = resp.json().get("data", {}).get("valueRange", {})
+    vr = _json_or_error(resp, "读取子表数据").get("data", {}).get("valueRange", {})
     return vr.get("values", [])
 
 
@@ -83,7 +96,7 @@ def create_spreadsheet(title):
         json={"title": title},
         timeout=30,
     )
-    d = resp.json().get("data", {}).get("spreadsheet", {})
+    d = _json_or_error(resp, "创建表格").get("data", {}).get("spreadsheet", {})
     token = d.get("spreadsheet_token", "")
     url = d.get("url", "")
     info = get_spreadsheet_info(token)
@@ -103,7 +116,7 @@ def create_sheet(token, title):
         },
         timeout=30,
     )
-    replies = resp.json().get("data", {}).get("replies", [])
+    replies = _json_or_error(resp, "创建子表").get("data", {}).get("replies", [])
     if replies:
         return replies[0].get("addSheet", {}).get("properties", {}).get("sheet_id", "")
     return ""
@@ -126,9 +139,7 @@ def write_to_sheet(token, sheet_id, values):
         json={"valueRange": {"range": cell_range, "values": rows}},
         timeout=30,
     )
-    data = resp.json()
-    if data.get("code") != 0:
-        raise RuntimeError(f"写入失败: {data.get('msg')}")
+    _json_or_error(resp, "写入表格")
 
 
 def _col_letter(idx):

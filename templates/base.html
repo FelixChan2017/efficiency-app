@@ -7,13 +7,18 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <nav>
-        <a href="/">快照管理</a>
-        <a href="/workers">人员名单</a>
-        <a href="/hours">填写工时</a>
-        <a href="/dashboard">人效看板</a>
+    <div class="app-shell">
+    <nav class="topbar">
+        <a class="brand" href="/">人效计算</a>
+        <div class="nav-links">
+            <a href="/" class="{{ 'active' if request.path == '/' else '' }}">快照管理</a>
+            <a href="/workers" class="{{ 'active' if request.path.startswith('/workers') else '' }}">人员名单</a>
+            <a href="/hours" class="{{ 'active' if request.path.startswith('/hours') else '' }}">填写工时</a>
+            <a href="/dashboard" class="{{ 'active' if request.path.startswith('/dashboard') else '' }}">人效看板</a>
+            <a href="/settings" class="{{ 'active' if request.path.startswith('/settings') else '' }}">飞书配置</a>
+        </div>
     </nav>
-    <main>
+    <main class="content">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div class="flash-container">
@@ -25,5 +30,6 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
+    </div>
 </body>
 </html>

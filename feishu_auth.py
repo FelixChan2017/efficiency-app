@@ -25,6 +25,26 @@ def save_app_config(app_id, app_secret):
     _write_config({"app_id": app_id, "app_secret": app_secret})
 
 
+def has_app_config():
+    cfg = _read_config()
+    return bool(cfg.get("app_id") and cfg.get("app_secret"))
+
+
+def mark_config_validated():
+    cfg = _read_config()
+    cfg["last_validated_at"] = int(time.time())
+    _write_config(cfg)
+
+
+def get_app_config_status():
+    cfg = _read_config()
+    return {
+        "configured": bool(cfg.get("app_id") and cfg.get("app_secret")),
+        "app_id": cfg.get("app_id", ""),
+        "last_validated_at": cfg.get("last_validated_at"),
+    }
+
+
 def get_token():
     """Get a valid tenant access token, refreshing if needed."""
     cfg = _read_config()

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>飞书配置</h1>
+
+<dl class="meta">
+    <dt>配置状态</dt>
+    <dd>{{ "已配置" if status.configured else "未配置" }}</dd>
+    {% if status.app_id %}
+    <dt>App ID</dt>
+    <dd>{{ status.app_id[:8] }}****{{ status.app_id[-4:] }}</dd>
+    {% endif %}
+    {% if status.last_validated_display %}
+    <dt>最近验证成功</dt>
+    <dd>{{ status.last_validated_display }}</dd>
+    {% endif %}
+</dl>
+
+<form method="POST" action="/settings" class="fetch-form">
+    <label for="app_id">App ID：</label>
+    <input type="text" id="app_id" name="app_id" placeholder="cli_xxxxxxxxxxxxxxxx" required>
+
+    <label for="app_secret">App Secret：</label>
+    <input type="password" id="app_secret" name="app_secret" placeholder="输入飞书自建应用的 App Secret" required>
+
+    <button type="submit">保存并验证</button>
+</form>
+
+{% if status.configured %}
+<p class="empty">当前已保存飞书应用凭证。重新提交会覆盖本地配置。</p>
+{% else %}
+<p class="empty">凭证只保存在本机的 feishu_config.json，不会提交到 Git。</p>
+{% endif %}
+{% endblock %}

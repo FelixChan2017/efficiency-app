@@ -6,13 +6,14 @@
 <form method="POST" action="/hours">
     <table>
         <thead>
-            <tr><th>作业人员</th><th>工时（小时）</th></tr>
+            <tr><th>作业人员</th><th>公司</th><th>工时（小时）</th></tr>
         </thead>
         <tbody>
         {% for w in workers %}
             <tr>
                 <td>{{ w.worker_name }}</td>
-                <td><input type="number" name="hours_{{ w.id }}" step="0.5" min="0"
+                <td>{{ w.company or "-" }}</td>
+                <td><input type="number" name="hours_{{ w.id }}" step="0.5" min="0.5"
                            value="{{ w.default_hours }}" class="hours-input"></td>
             </tr>
         {% endfor %}

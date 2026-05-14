@@ -156,7 +156,7 @@ def _safe_get(rows, row, col):
     return None
 
 
-def fetch_and_parse(url):
+def fetch_and_parse(url, include_warnings=False):
     """
     Fetch spreadsheet from URL and parse all sheets.
     Returns (spreadsheet_title, [(sheet_title, worker_name, round, completed, total), ...])
@@ -164,6 +164,7 @@ def fetch_and_parse(url):
     token, title = resolve_url(url)
     sheets = get_spreadsheet_info(token)
     all_details = []
+    warnings = []
 
     for sheet in sheets:
         sheet_id = sheet["sheet_id"]
@@ -175,13 +176,17 @@ def fetch_and_parse(url):
 
         try:
             rows = read_sheet_data(token, sheet_id)
-        except Exception:
+        except Exception as exc:
+            warnings.append(f"{sheet_title}: {exc}")
             continue
 
         if not rows:
+            warnings.append(f"{sheet_title}: 子表为空")
             continue
 
         for worker_name, rd, completed, total in parse_sheet(rows, merges):
             all_details.append((sheet_title, worker_name, rd, completed, total))
 
+    if include_warnings:
+        return title, all_details, warnings
     return title, all_details
