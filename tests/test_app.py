@@ -68,6 +68,7 @@ def test_select_sheets_scans_all_assignment_sheets_and_progress():
         {"sheet_id": "day1", "title": "5.17评估数据"},
         {"sheet_id": "day2", "title": "评估数据"},
         {"sheet_id": "practice", "title": "练习题"},
+        {"sheet_id": "special", "title": "专项作业A"},
         {"sheet_id": "progress", "title": "作业进度"},
         {"sheet_id": "trash", "title": "抛弃"},
         {"sheet_id": "template", "title": "作业模版（勿）"},
@@ -75,7 +76,7 @@ def test_select_sheets_scans_all_assignment_sheets_and_progress():
 
     assignment, progress = lark_reader._select_sheets(sheets)
 
-    assert [s["sheet_id"] for s in assignment] == ["day1", "day2", "practice"]
+    assert [s["sheet_id"] for s in assignment] == ["day1", "day2", "practice", "special"]
     assert [s["sheet_id"] for s in progress] == ["progress"]
 
 

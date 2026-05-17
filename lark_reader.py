@@ -101,20 +101,13 @@ def _is_assignment_sheet(sheet):
     title = sheet.get("title", "")
     if any(keyword in title for keyword in EXCLUDED_SHEET_KEYWORDS):
         return False
-    return "评估数据" in title or "练习" in title
+    return not _is_progress_sheet(sheet)
 
 
 def _select_sheets(sheets):
     progress_sheets = [s for s in sheets if _is_progress_sheet(s)]
 
-    assignment_sheets = [s for s in sheets if _is_assignment_sheet(s)]
-    if not assignment_sheets:
-        assignment_sheets = [
-            s for s in sheets
-            if not _is_progress_sheet(s)
-            and not any(keyword in s.get("title", "") for keyword in EXCLUDED_SHEET_KEYWORDS)
-        ]
-    return assignment_sheets, progress_sheets
+    return [s for s in sheets if _is_assignment_sheet(s)], progress_sheets
 
 
 def parse_sheet(rows, merges):
