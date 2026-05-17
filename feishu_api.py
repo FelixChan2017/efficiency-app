@@ -77,15 +77,27 @@ def get_spreadsheet_info(token):
     return result
 
 
-def read_sheet_data(token, sheet_id):
+def read_sheet_data(token, sheet_id, row_count=500, column_count=80):
     """Read cell values from a sheet via v2 API. Returns 2D list."""
-    resp = requests.get(
-        f"{BASE}/sheets/v2/spreadsheets/{token}/values/{sheet_id}!A1:CA500",
-        headers=_headers(),
-        timeout=30,
-    )
-    vr = _json_or_error(resp, "读取子表数据").get("data", {}).get("valueRange", {})
-    return vr.get("values", [])
+    rows = []
+    max_rows = max(int(row_count or 500), 1)
+    max_cols = max(int(column_count or 80), 1)
+    end_col = _col_letter(max_cols - 1)
+
+    chunk_size = 500
+    for start_row in range(1, max_rows + 1, chunk_size):
+        end_row = min(start_row + chunk_size - 1, max_rows)
+        cell_range = f"{sheet_id}!A{start_row}:{end_col}{end_row}"
+        resp = requests.get(
+            f"{BASE}/sheets/v2/spreadsheets/{token}/values/{cell_range}",
+            headers=_headers(),
+            timeout=30,
+        )
+        vr = _json_or_error(resp, "读取子表数据").get("data", {}).get("valueRange", {})
+        values = vr.get("values", [])
+        if values:
+            rows.extend(values)
+    return rows
 
 
 def create_spreadsheet(title):

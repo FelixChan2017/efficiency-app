@@ -63,6 +63,19 @@ def test_parse_progress_workers_stops_at_total():
     assert lark_reader.parse_progress_workers(rows) == ["张三", "李四"]
 
 
+def test_select_sheets_uses_requested_sheet_and_progress_only():
+    sheets = [
+        {"sheet_id": "target", "title": "评估数据"},
+        {"sheet_id": "progress", "title": "作业进度"},
+        {"sheet_id": "trash", "title": "抛弃"},
+    ]
+
+    assignment, progress = lark_reader._select_sheets("https://example.com/wiki/abc?sheet=target", sheets)
+
+    assert [s["sheet_id"] for s in assignment] == ["target"]
+    assert [s["sheet_id"] for s in progress] == ["progress"]
+
+
 def test_create_sheet_accepts_camel_case_sheet_id():
     class FakeResponse:
         status_code = 200
@@ -104,6 +117,7 @@ if __name__ == "__main__":
     test_find_column()
     test_parse_sheet_counts_completed_tasks_by_round()
     test_parse_progress_workers_stops_at_total()
+    test_select_sheets_uses_requested_sheet_and_progress_only()
     test_create_sheet_accepts_camel_case_sheet_id()
     test_dashboard_export_requires_destination_url()
     print("All tests passed")

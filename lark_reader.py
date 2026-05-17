@@ -1,4 +1,5 @@
 """Read and parse Feishu spreadsheets via direct REST API."""
+from urllib.parse import parse_qs, urlparse
 from feishu_api import (
     resolve_url as _resolve_url,
     get_spreadsheet_info as _get_spreadsheet_info,
@@ -7,6 +8,9 @@ from feishu_api import (
     create_sheet as _create_sheet,
     write_to_sheet as _write_to_sheet,
 )
+
+
+EXCLUDED_SHEET_KEYWORDS = ("抛弃", "模板", "取题", "练习", "人效看板")
 
 
 def resolve_url(url):
@@ -56,12 +60,13 @@ def _to_text(cell):
     return str(cell)
 
 
-def _find_column(rows, keywords, max_col=80):
+def _find_column(rows, keywords, max_col=None):
     """Find column index whose header contains any of the given keywords."""
     if not rows:
         return None
     header = rows[0]
-    for i, cell in enumerate(header[:max_col]):
+    cells = header if max_col is None else header[:max_col]
+    for i, cell in enumerate(cells):
         text = (_to_text(cell) or "").strip()
         for kw in keywords:
             if kw in text:
@@ -87,6 +92,41 @@ def parse_progress_workers(rows):
             seen.add(name)
             names.append(name)
     return names
+
+
+def _selected_sheet_id(url):
+    query = parse_qs(urlparse(url).query)
+    values = query.get("sheet") or query.get("sheet_id")
+    return values[0] if values else ""
+
+
+def _is_progress_sheet(sheet):
+    return "进度" in sheet.get("title", "")
+
+
+def _is_assignment_sheet(sheet):
+    title = sheet.get("title", "")
+    if any(keyword in title for keyword in EXCLUDED_SHEET_KEYWORDS):
+        return False
+    return "评估数据" in title
+
+
+def _select_sheets(url, sheets):
+    selected_id = _selected_sheet_id(url)
+    selected = next((s for s in sheets if s.get("sheet_id") == selected_id), None)
+    progress_sheets = [s for s in sheets if _is_progress_sheet(s)]
+
+    if selected and not _is_progress_sheet(selected):
+        return [selected], progress_sheets
+
+    assignment_sheets = [s for s in sheets if _is_assignment_sheet(s)]
+    if not assignment_sheets:
+        assignment_sheets = [
+            s for s in sheets
+            if not _is_progress_sheet(s)
+            and not any(keyword in s.get("title", "") for keyword in EXCLUDED_SHEET_KEYWORDS)
+        ]
+    return assignment_sheets, progress_sheets
 
 
 def parse_sheet(rows, merges):
@@ -183,11 +223,25 @@ def fetch_and_parse(url, include_warnings=False):
     """
     token, title = resolve_url(url)
     sheets = get_spreadsheet_info(token)
+    assignment_sheets, progress_sheets = _select_sheets(url, sheets)
     all_details = []
     warnings = []
     progress_workers = []
 
-    for sheet in sheets:
+    for sheet in progress_sheets:
+        try:
+            rows = _read_sheet_data(
+                token,
+                sheet["sheet_id"],
+                row_count=sheet.get("row_count", 500),
+                column_count=sheet.get("column_count", 80),
+            )
+        except Exception as exc:
+            warnings.append(f"{sheet['title']}: {exc}")
+            continue
+        progress_workers.extend(parse_progress_workers(rows))
+
+    for sheet in assignment_sheets:
         sheet_id = sheet["sheet_id"]
         sheet_title = sheet["title"]
         merges = sheet.get("merges", [])
@@ -196,7 +250,12 @@ def fetch_and_parse(url, include_warnings=False):
             continue
 
         try:
-            rows = read_sheet_data(token, sheet_id)
+            rows = _read_sheet_data(
+                token,
+                sheet_id,
+                row_count=sheet.get("row_count", 500),
+                column_count=sheet.get("column_count", 80),
+            )
         except Exception as exc:
             warnings.append(f"{sheet_title}: {exc}")
             continue
@@ -204,9 +263,6 @@ def fetch_and_parse(url, include_warnings=False):
         if not rows:
             warnings.append(f"{sheet_title}: 子表为空")
             continue
-
-        if "进度" in sheet_title:
-            progress_workers.extend(parse_progress_workers(rows))
 
         for worker_name, rd, completed, total in parse_sheet(rows, merges):
             all_details.append((sheet_title, worker_name, rd, completed, total))
