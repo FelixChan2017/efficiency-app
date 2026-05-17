@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models
 import feishu_api
 import lark_reader
+from app import app
 
 
 def test_db_init():
@@ -91,10 +92,18 @@ def test_create_sheet_accepts_camel_case_sheet_id():
         feishu_api.requests.post = original_post
 
 
+def test_dashboard_export_requires_destination_url():
+    models.init_db()
+    client = app.test_client()
+    response = client.post("/dashboard/export", data={"from_id": "1", "to_id": "2", "dest_url": ""})
+    assert response.status_code == 302
+
+
 if __name__ == "__main__":
     test_db_init()
     test_find_column()
     test_parse_sheet_counts_completed_tasks_by_round()
     test_parse_progress_workers_stops_at_total()
     test_create_sheet_accepts_camel_case_sheet_id()
+    test_dashboard_export_requires_destination_url()
     print("All tests passed")

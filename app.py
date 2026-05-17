@@ -4,7 +4,7 @@ import os
 import sys
 from flask import Flask, render_template, request, redirect, url_for, flash
 import models
-from lark_reader import fetch_and_parse, create_spreadsheet, create_sheet, write_to_sheet, resolve_url as resolve_feishu_url
+from lark_reader import fetch_and_parse, create_sheet, write_to_sheet, resolve_url as resolve_feishu_url
 from feishu_auth import save_app_config, has_app_config, get_token, mark_config_validated, get_app_config_status
 
 
@@ -266,6 +266,9 @@ def dashboard_export():
     from_id = int(request.form.get("from_id"))
     to_id = int(request.form.get("to_id"))
     dest_url = request.form.get("dest_url", "").strip()
+    if not dest_url:
+        flash("请填写要导出的飞书表格链接", "error")
+        return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
 
     rows = [["作业人员", "公司", "作业增量", "工时（小时）", "人效"]]
     for item in _build_dashboard_rows(from_id, to_id):
@@ -281,18 +284,11 @@ def dashboard_export():
     date_label = to_snap["fetched_at"][:10]
 
     try:
-        if dest_url:
-            dest_token, _ = resolve_feishu_url(dest_url)
-            base_title = f"人效看板_{date_label}_{from_label}vs{to_label}"
-            sheet_id, sheet_title = _create_unique_sheet(dest_token, base_title)
-            write_to_sheet(dest_token, sheet_id, rows)
-            ss_url = dest_url
-        else:
-            result = create_spreadsheet(_sheet_title(f"人效看板_{date_label}_{from_label}vs{to_label}"))
-            token = result["token"]
-            sheet_id = result.get("sheet_id", "")
-            ss_url = result["url"]
-            write_to_sheet(token, sheet_id, rows)
+        dest_token, _ = resolve_feishu_url(dest_url)
+        base_title = f"人效看板_{date_label}_{from_label}vs{to_label}"
+        sheet_id, sheet_title = _create_unique_sheet(dest_token, base_title)
+        write_to_sheet(dest_token, sheet_id, rows)
+        ss_url = dest_url
     except Exception as e:
         flash(f"导出失败: {e}", "error")
         return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
