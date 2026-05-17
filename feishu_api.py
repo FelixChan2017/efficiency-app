@@ -116,10 +116,20 @@ def create_sheet(token, title):
         },
         timeout=30,
     )
-    replies = _json_or_error(resp, "创建子表").get("data", {}).get("replies", [])
+    data = _json_or_error(resp, "创建子表").get("data", {})
+    replies = data.get("replies", [])
     if replies:
-        return replies[0].get("addSheet", {}).get("properties", {}).get("sheet_id", "")
-    return ""
+        props = replies[0].get("addSheet", {}).get("properties", {})
+        sheet_id = props.get("sheet_id") or props.get("sheetId")
+        if sheet_id:
+            return sheet_id
+
+    sheet = data.get("sheet", {})
+    sheet_id = sheet.get("sheet_id") or sheet.get("sheetId")
+    if sheet_id:
+        return sheet_id
+
+    raise RuntimeError("创建子表失败: 飞书返回成功，但响应中没有 sheet_id")
 
 
 def write_to_sheet(token, sheet_id, values):

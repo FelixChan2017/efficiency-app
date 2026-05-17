@@ -282,9 +282,6 @@ def dashboard_export():
             dest_token, _ = resolve_feishu_url(dest_url)
             base_title = f"人效看板_{date_label}_{from_label}vs{to_label}"
             sheet_id, sheet_title = _create_unique_sheet(dest_token, base_title)
-            if not sheet_id:
-                flash("创建子表失败，请确认链接有效且有编辑权限", "error")
-                return redirect(url_for("dashboard", from_id=from_id, to_id=to_id))
             write_to_sheet(dest_token, sheet_id, rows)
             ss_url = dest_url
         else:

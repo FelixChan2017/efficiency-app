@@ -4,6 +4,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import models
+import feishu_api
 import lark_reader
 
 
@@ -49,8 +50,38 @@ def test_parse_sheet_counts_completed_tasks_by_round():
     ]
 
 
+def test_create_sheet_accepts_camel_case_sheet_id():
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "code": 0,
+                "data": {
+                    "replies": [{
+                        "addSheet": {
+                            "properties": {
+                                "sheetId": "abc123",
+                            }
+                        }
+                    }]
+                },
+            }
+
+    original_headers = feishu_api._headers
+    original_post = feishu_api.requests.post
+    try:
+        feishu_api._headers = lambda: {}
+        feishu_api.requests.post = lambda *args, **kwargs: FakeResponse()
+        assert feishu_api.create_sheet("spreadsheet_token", "导出") == "abc123"
+    finally:
+        feishu_api._headers = original_headers
+        feishu_api.requests.post = original_post
+
+
 if __name__ == "__main__":
     test_db_init()
     test_find_column()
     test_parse_sheet_counts_completed_tasks_by_round()
+    test_create_sheet_accepts_camel_case_sheet_id()
     print("All tests passed")
