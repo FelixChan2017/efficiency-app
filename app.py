@@ -44,6 +44,28 @@ def _create_unique_sheet(token, base_title):
     return create_sheet(token, title), title
 
 
+def _build_dashboard_rows(from_id, to_id):
+    from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
+    to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
+    info_map = models.get_worker_info_map()
+    names = sorted(set(from_agg) | set(to_agg) | set(info_map))
+
+    result = []
+    for name in names:
+        info = info_map.get(name, {"company": "", "hours": 8.0})
+        prev = from_agg.get(name, 0)
+        curr = to_agg.get(name, 0)
+        result.append({
+            "worker_name": name,
+            "company": info["company"],
+            "from_count": prev,
+            "to_count": curr,
+            "work_done": curr - prev,
+            "work_hours": info["hours"] or 8.0,
+        })
+    return result
+
+
 @app.route("/")
 def index():
     snapshots = models.list_snapshots()
@@ -226,28 +248,13 @@ def dashboard():
     if from_id and to_id:
         from_id = int(from_id)
         to_id = int(to_id)
-        from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
-        to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
-        info_map = models.get_worker_info_map()
 
         from_snap, _ = models.get_snapshot(from_id)
         to_snap, _ = models.get_snapshot(to_id)
         from_label = from_snap["label"] or f"快照{from_id}"
         to_label = to_snap["label"] or f"快照{to_id}"
 
-        result = []
-        for name, info in info_map.items():
-            prev = from_agg.get(name, 0)
-            curr = to_agg.get(name, 0)
-            diff = curr - prev
-            result.append({
-                "worker_name": name,
-                "company": info["company"],
-                "from_count": prev,
-                "to_count": curr,
-                "work_done": diff,
-                "work_hours": info["hours"],
-            })
+        result = _build_dashboard_rows(from_id, to_id)
 
     return render_template("dashboard.html", snapshots=snapshots,
                            from_id=from_id, to_id=to_id, result=result,
@@ -260,16 +267,12 @@ def dashboard_export():
     to_id = int(request.form.get("to_id"))
     dest_url = request.form.get("dest_url", "").strip()
 
-    from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
-    to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
-    info_map = models.get_worker_info_map()
-
     rows = [["作业人员", "公司", "作业增量", "工时（小时）", "人效"]]
-    for name, info in info_map.items():
-        diff = to_agg.get(name, 0) - from_agg.get(name, 0)
-        hours = info["hours"]
+    for item in _build_dashboard_rows(from_id, to_id):
+        diff = item["work_done"]
+        hours = item["work_hours"]
         eff = diff / hours if hours > 0 else 0
-        rows.append([name, info["company"], str(diff), str(hours), f"{eff:.2f}"])
+        rows.append([item["worker_name"], item["company"], str(diff), str(hours), f"{eff:.2f}"])
 
     from_snap, _ = models.get_snapshot(from_id)
     to_snap, _ = models.get_snapshot(to_id)

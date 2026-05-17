@@ -69,6 +69,26 @@ def _find_column(rows, keywords, max_col=80):
     return None
 
 
+def parse_progress_workers(rows):
+    """Parse the worker list from a progress/summary sheet."""
+    if not rows:
+        return []
+
+    names = []
+    seen = set()
+    stop_words = {"总计", "合计", "一轮", "二轮", "三轮", "总人效"}
+    for row in rows[1:80]:
+        name = (_to_text(_safe_get([row], 0, 0)) or "").strip()
+        if not name:
+            continue
+        if name in stop_words:
+            break
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    return names
+
+
 def parse_sheet(rows, merges):
     """
     Parse a sheet to count completed assignments per worker.
@@ -165,6 +185,7 @@ def fetch_and_parse(url, include_warnings=False):
     sheets = get_spreadsheet_info(token)
     all_details = []
     warnings = []
+    progress_workers = []
 
     for sheet in sheets:
         sheet_id = sheet["sheet_id"]
@@ -184,8 +205,17 @@ def fetch_and_parse(url, include_warnings=False):
             warnings.append(f"{sheet_title}: 子表为空")
             continue
 
+        if "进度" in sheet_title:
+            progress_workers.extend(parse_progress_workers(rows))
+
         for worker_name, rd, completed, total in parse_sheet(rows, merges):
             all_details.append((sheet_title, worker_name, rd, completed, total))
+
+    existing_workers = {d[1] for d in all_details}
+    for name in progress_workers:
+        if name not in existing_workers:
+            all_details.append(("作业进度", name, "一轮", 0, 0))
+            all_details.append(("作业进度", name, "二轮", 0, 0))
 
     if include_warnings:
         return title, all_details, warnings

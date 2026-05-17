@@ -151,6 +151,14 @@ def write_to_sheet(token, sheet_id, values):
     )
     _json_or_error(resp, "写入表格")
 
+    verify_rows = read_sheet_data(token, sheet_id)
+    if not verify_rows or not verify_rows[0]:
+        raise RuntimeError("写入表格失败: 写入接口返回成功，但目标子表回读为空")
+    expected_header = rows[0][0] if rows and rows[0] else ""
+    actual_header = str(verify_rows[0][0]) if verify_rows[0][0] is not None else ""
+    if expected_header and actual_header != expected_header:
+        raise RuntimeError("写入表格失败: 目标子表内容校验未通过")
+
 
 def _col_letter(idx):
     """0 -> A, 25 -> Z, 26 -> AA, etc."""

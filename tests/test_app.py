@@ -50,6 +50,18 @@ def test_parse_sheet_counts_completed_tasks_by_round():
     ]
 
 
+def test_parse_progress_workers_stops_at_total():
+    rows = [
+        ["作业进度"],
+        ["张三"],
+        ["李四"],
+        ["总计"],
+        ["不应计入"],
+    ]
+
+    assert lark_reader.parse_progress_workers(rows) == ["张三", "李四"]
+
+
 def test_create_sheet_accepts_camel_case_sheet_id():
     class FakeResponse:
         status_code = 200
@@ -83,5 +95,6 @@ if __name__ == "__main__":
     test_db_init()
     test_find_column()
     test_parse_sheet_counts_completed_tasks_by_round()
+    test_parse_progress_workers_stops_at_total()
     test_create_sheet_accepts_camel_case_sheet_id()
     print("All tests passed")
