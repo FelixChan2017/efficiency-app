@@ -1,5 +1,4 @@
 """Read and parse Feishu spreadsheets via direct REST API."""
-from urllib.parse import parse_qs, urlparse
 from feishu_api import (
     resolve_url as _resolve_url,
     get_spreadsheet_info as _get_spreadsheet_info,
@@ -10,7 +9,7 @@ from feishu_api import (
 )
 
 
-EXCLUDED_SHEET_KEYWORDS = ("抛弃", "模板", "取题", "练习", "人效看板")
+EXCLUDED_SHEET_KEYWORDS = ("抛弃", "模板", "模版", "取题", "人效看板")
 
 
 def resolve_url(url):
@@ -94,12 +93,6 @@ def parse_progress_workers(rows):
     return names
 
 
-def _selected_sheet_id(url):
-    query = parse_qs(urlparse(url).query)
-    values = query.get("sheet") or query.get("sheet_id")
-    return values[0] if values else ""
-
-
 def _is_progress_sheet(sheet):
     return "进度" in sheet.get("title", "")
 
@@ -108,16 +101,11 @@ def _is_assignment_sheet(sheet):
     title = sheet.get("title", "")
     if any(keyword in title for keyword in EXCLUDED_SHEET_KEYWORDS):
         return False
-    return "评估数据" in title
+    return "评估数据" in title or "练习" in title
 
 
-def _select_sheets(url, sheets):
-    selected_id = _selected_sheet_id(url)
-    selected = next((s for s in sheets if s.get("sheet_id") == selected_id), None)
+def _select_sheets(sheets):
     progress_sheets = [s for s in sheets if _is_progress_sheet(s)]
-
-    if selected and not _is_progress_sheet(selected):
-        return [selected], progress_sheets
 
     assignment_sheets = [s for s in sheets if _is_assignment_sheet(s)]
     if not assignment_sheets:
@@ -223,7 +211,7 @@ def fetch_and_parse(url, include_warnings=False):
     """
     token, title = resolve_url(url)
     sheets = get_spreadsheet_info(token)
-    assignment_sheets, progress_sheets = _select_sheets(url, sheets)
+    assignment_sheets, progress_sheets = _select_sheets(sheets)
     all_details = []
     warnings = []
     progress_workers = []

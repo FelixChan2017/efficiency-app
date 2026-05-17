@@ -63,16 +63,19 @@ def test_parse_progress_workers_stops_at_total():
     assert lark_reader.parse_progress_workers(rows) == ["张三", "李四"]
 
 
-def test_select_sheets_uses_requested_sheet_and_progress_only():
+def test_select_sheets_scans_all_assignment_sheets_and_progress():
     sheets = [
-        {"sheet_id": "target", "title": "评估数据"},
+        {"sheet_id": "day1", "title": "5.17评估数据"},
+        {"sheet_id": "day2", "title": "评估数据"},
+        {"sheet_id": "practice", "title": "练习题"},
         {"sheet_id": "progress", "title": "作业进度"},
         {"sheet_id": "trash", "title": "抛弃"},
+        {"sheet_id": "template", "title": "作业模版（勿）"},
     ]
 
-    assignment, progress = lark_reader._select_sheets("https://example.com/wiki/abc?sheet=target", sheets)
+    assignment, progress = lark_reader._select_sheets(sheets)
 
-    assert [s["sheet_id"] for s in assignment] == ["target"]
+    assert [s["sheet_id"] for s in assignment] == ["day1", "day2", "practice"]
     assert [s["sheet_id"] for s in progress] == ["progress"]
 
 
@@ -117,7 +120,7 @@ if __name__ == "__main__":
     test_find_column()
     test_parse_sheet_counts_completed_tasks_by_round()
     test_parse_progress_workers_stops_at_total()
-    test_select_sheets_uses_requested_sheet_and_progress_only()
+    test_select_sheets_scans_all_assignment_sheets_and_progress()
     test_create_sheet_accepts_camel_case_sheet_id()
     test_dashboard_export_requires_destination_url()
     print("All tests passed")
