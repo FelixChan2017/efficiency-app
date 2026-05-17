@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models
 import feishu_api
 import lark_reader
-from app import app
+from app import app, _build_dashboard_rows
 
 
 def test_db_init():
@@ -115,6 +115,26 @@ def test_dashboard_export_requires_destination_url():
     assert response.status_code == 302
 
 
+def test_dashboard_rows_only_include_worker_list():
+    original_agg = models.get_snapshot_worker_agg
+    original_info = models.get_worker_info_map
+    try:
+        models.get_snapshot_worker_agg = lambda snapshot_id: [
+            {"worker_name": "名单内", "completed": 5},
+            {"worker_name": "名单外", "completed": 7},
+        ]
+        models.get_worker_info_map = lambda: {
+            "名单内": {"company": "CL", "hours": 8.0},
+        }
+
+        rows = _build_dashboard_rows(1, 2)
+
+        assert [r["worker_name"] for r in rows] == ["名单内"]
+    finally:
+        models.get_snapshot_worker_agg = original_agg
+        models.get_worker_info_map = original_info
+
+
 if __name__ == "__main__":
     test_db_init()
     test_find_column()
@@ -123,4 +143,5 @@ if __name__ == "__main__":
     test_select_sheets_scans_all_assignment_sheets_and_progress()
     test_create_sheet_accepts_camel_case_sheet_id()
     test_dashboard_export_requires_destination_url()
+    test_dashboard_rows_only_include_worker_list()
     print("All tests passed")

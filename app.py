@@ -48,11 +48,11 @@ def _build_dashboard_rows(from_id, to_id):
     from_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(from_id)}
     to_agg = {r["worker_name"]: r["completed"] for r in models.get_snapshot_worker_agg(to_id)}
     info_map = models.get_worker_info_map()
-    names = sorted(set(from_agg) | set(to_agg) | set(info_map))
+    names = sorted(info_map)
 
     result = []
     for name in names:
-        info = info_map.get(name, {"company": "", "hours": 8.0})
+        info = info_map[name]
         prev = from_agg.get(name, 0)
         curr = to_agg.get(name, 0)
         result.append({
